@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Libros Pendientes v3.1</title>
+    <title>Gestión de Libros Pendientes v3.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,6 +14,10 @@
         .card-enter, .btn-enter { animation: card-enter 0.5s ease-out forwards; opacity: 0; }
         @keyframes card-enter { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         .hidden { display: none; }
+        /* Nuevos estilos para los estados de los libros pendientes */
+        .book-prepared { background-color: #fef9c3 !important; border-color: #facc15; } /* Amarillo claro */
+        .book-delivered { opacity: 0.6; }
+        .book-delivered .book-title { text-decoration: line-through; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -51,10 +55,18 @@
              <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <!-- Columna de Acciones del Catálogo -->
                 <div class="lg:col-span-1 space-y-8">
-                    <!-- Añadir uno a uno -->
+                    <!-- Añadir y Editar Libros -->
                     <div class="bg-white p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-semibold mb-4 text-slate-900">Añadir Libro (Manual)</h2>
-                        <form id="add-master-book-form" class="space-y-4"><input type="hidden" id="edit-book-id"><input type="hidden"><div><label for="masterBookTitle" class="block text-sm font-medium text-slate-700">Título del Libro</label><input type="text" id="masterBookTitle" required class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></div><div><label for="masterCourse" class="block text-sm font-medium text-slate-700">Curso</label><input type="text" id="masterCourse" required class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ej: 1º ESO A"></div><button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">Añadir al Catálogo</button></form>
+                        <h2 id="form-title" class="text-2xl font-semibold mb-4 text-slate-900">Añadir Libro</h2>
+                        <form id="add-master-book-form" class="space-y-4">
+                            <input type="hidden" id="edit-book-id">
+                            <div><label for="masterBookTitle" class="block text-sm font-medium text-slate-700">Título del Libro</label><input type="text" id="masterBookTitle" required class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></div>
+                            <div><label for="masterCourse" class="block text-sm font-medium text-slate-700">Curso</label><input type="text" id="masterCourse" required class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ej: 1º ESO A"></div>
+                            <div class="flex space-x-2">
+                                <button type="submit" id="submit-master-book" class="flex-grow bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">Añadir al Catálogo</button>
+                                <button type="button" id="cancel-edit-btn" class="hidden bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancelar</button>
+                            </div>
+                        </form>
                     </div>
                     <!-- Carga Masiva para el catálogo -->
                     <div class="bg-white p-6 rounded-xl shadow-md">
@@ -83,7 +95,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, serverTimestamp, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Configuration ---
         // PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE OBTENIDA EN EL PASO 1.4
@@ -130,30 +142,50 @@
             setTimeout(() => toast.classList.add('hidden'), 3000);
         }
 
+        // --- CATALOG LOGIC ---
         const addMasterBookForm = document.getElementById('add-master-book-form');
         const masterBookListDiv = document.getElementById('master-book-list');
         const catalogEmpty = document.getElementById('catalog-empty');
         const masterCsvInput = document.getElementById('master-csv-input');
         const uploadMasterCsvBtn = document.getElementById('upload-master-csv-btn');
         const masterUploadFeedback = document.getElementById('master-upload-feedback');
+        const formTitle = document.getElementById('form-title');
+        const submitMasterBookBtn = document.getElementById('submit-master-book');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const editBookIdInput = document.getElementById('edit-book-id');
 
         addMasterBookForm.addEventListener('submit', async e => {
             e.preventDefault();
             const title = addMasterBookForm.masterBookTitle.value.trim();
             const course = addMasterBookForm.masterCourse.value.trim().toUpperCase();
+            const bookId = editBookIdInput.value;
+
             if (title && course) {
-                await addDoc(collection(db, MASTER_BOOKS_COLLECTION), { title, course });
-                addMasterBookForm.reset();
-                showToast('Libro añadido al catálogo.');
+                if (bookId) { // Editing existing book
+                    const bookRef = doc(db, MASTER_BOOKS_COLLECTION, bookId);
+                    await updateDoc(bookRef, { title, course });
+                    showToast('Libro actualizado.');
+                } else { // Adding new book
+                    await addDoc(collection(db, MASTER_BOOKS_COLLECTION), { title, course });
+                    showToast('Libro añadido al catálogo.');
+                }
+                resetMasterBookForm();
             }
         });
 
+        function resetMasterBookForm() {
+            addMasterBookForm.reset();
+            editBookIdInput.value = '';
+            formTitle.textContent = 'Añadir Libro';
+            submitMasterBookBtn.textContent = 'Añadir al Catálogo';
+            cancelEditBtn.classList.add('hidden');
+        }
+        
+        cancelEditBtn.addEventListener('click', resetMasterBookForm);
+
         uploadMasterCsvBtn.addEventListener('click', async () => {
             const text = masterCsvInput.value.trim();
-            if (!text) {
-                showMasterFeedback('El campo está vacío.', 'error');
-                return;
-            }
+            if (!text) { showMasterFeedback('El campo está vacío.', 'error'); return; }
             uploadMasterCsvBtn.disabled = true;
             uploadMasterCsvBtn.textContent = 'Procesando...';
 
@@ -171,7 +203,6 @@
                 if (parts.length >= 2) {
                     const course = parts.pop().trim();
                     const title = parts.join(',').trim();
-                    
                     if (title && course) {
                         if (operationsInCurrentBatch >= BATCH_LIMIT) {
                             batches.push(writeBatch(db));
@@ -189,7 +220,7 @@
             if (validEntries > 0) {
                 try {
                     await Promise.all(batches.map(batch => batch.commit()));
-                    let msg = `${validEntries} libros cargados al catálogo.`;
+                    let msg = `${validEntries} libros cargados.`;
                     if (errors.length > 0) {
                         msg += ` Error en líneas: ${errors.join(', ')}.`;
                         showMasterFeedback(msg, 'warning');
@@ -199,11 +230,9 @@
                     }
                 } catch (error) {
                     console.error("Error detallado en carga masiva:", error);
-                    showMasterFeedback('Error al guardar. Revisa la consola (F12) para detalles.', 'error');
+                    showMasterFeedback('Error al guardar. Revisa la consola (F12).', 'error');
                 }
-            } else {
-                showMasterFeedback(`Ninguna línea procesada. Revisa el formato (Título,Curso).`, 'error');
-            }
+            } else { showMasterFeedback(`Ninguna línea procesada. Revisa el formato (Título,Curso).`, 'error'); }
             uploadMasterCsvBtn.disabled = false;
             uploadMasterCsvBtn.textContent = 'Cargar Listado al Catálogo';
         });
@@ -211,11 +240,7 @@
         function showMasterFeedback(message, type) {
             masterUploadFeedback.textContent = message;
             masterUploadFeedback.className = 'mt-4 text-sm px-4 py-3 rounded-lg';
-            const colors = {
-                success: 'bg-green-100 text-green-800',
-                error: 'bg-red-100 text-red-800',
-                warning: 'bg-yellow-100 text-yellow-800'
-            };
+            const colors = { success: 'bg-green-100 text-green-800', error: 'bg-red-100 text-red-800', warning: 'bg-yellow-100 text-yellow-800' };
             masterUploadFeedback.classList.add(...(colors[type] || colors.warning).split(' '));
             setTimeout(() => masterUploadFeedback.classList.add('hidden'), 6000);
         }
@@ -232,8 +257,11 @@
                     <h3 class="text-lg font-semibold text-indigo-700">${course}</h3>
                     <ul class="mt-2 space-y-1">${booksByCourse[course].sort((a,b) => a.title.localeCompare(b.title)).map(book => `
                         <li class="flex justify-between items-center p-2 rounded-md hover:bg-slate-50">
-                            <span>${book.title}</span>
-                            <button data-id="${book.id}" class="delete-master-book text-red-400 hover:text-red-600 text-xs font-bold">ELIMINAR</button>
+                            <span class="flex-grow">${book.title}</span>
+                            <div class="flex-shrink-0 space-x-3">
+                                <button data-id="${book.id}" class="edit-master-book text-blue-500 hover:text-blue-700 text-xs font-bold">EDITAR</button>
+                                <button data-id="${book.id}" class="delete-master-book text-red-400 hover:text-red-600 text-xs font-bold">ELIMINAR</button>
+                            </div>
                         </li>`).join('')}
                     </ul>
                 </div>
@@ -241,10 +269,23 @@
         }
         
         masterBookListDiv.addEventListener('click', async e => {
-            if (e.target.classList.contains('delete-master-book')) {
+            const target = e.target;
+            if (target.classList.contains('delete-master-book')) {
                 if (confirm('¿Seguro que quieres eliminar este libro del catálogo?')) {
-                    await deleteDoc(doc(db, MASTER_BOOKS_COLLECTION, e.target.dataset.id));
+                    await deleteDoc(doc(db, MASTER_BOOKS_COLLECTION, target.dataset.id));
                     showToast('Libro eliminado del catálogo.');
+                }
+            }
+            if (target.classList.contains('edit-master-book')) {
+                const book = masterBooks.find(b => b.id === target.dataset.id);
+                if (book) {
+                    editBookIdInput.value = book.id;
+                    addMasterBookForm.masterBookTitle.value = book.title;
+                    addMasterBookForm.masterCourse.value = book.course;
+                    formTitle.textContent = 'Editando Libro';
+                    submitMasterBookBtn.textContent = 'Guardar Cambios';
+                    cancelEditBtn.classList.remove('hidden');
+                    addMasterBookForm.scrollIntoView({ behavior: 'smooth' });
                 }
             }
         });
@@ -258,16 +299,13 @@
         const pendingCountSpan = document.getElementById('pending-count');
         const pendingEmptyP = document.getElementById('pending-empty');
 
-        // **CORREGIDO** Función de renderizado de botones más robusta
         function renderCourseSelectionButtons(books) {
-            courseSelectionDiv.innerHTML = ''; // Limpiar botones anteriores
+            courseSelectionDiv.innerHTML = '';
             const courses = [...new Set(books.map(b => b.course).filter(c => c))].sort();
-
             if (courses.length === 0) {
-                courseSelectionDiv.innerHTML = `<p class="text-sm text-slate-500 col-span-2">Aún no hay libros en el catálogo. Ve a "Gestión del Catálogo" para añadirlos.</p>`;
+                courseSelectionDiv.innerHTML = `<p class="text-sm text-slate-500 col-span-2">Aún no hay libros en el catálogo.</p>`;
                 return;
             }
-
             courses.forEach(course => {
                 const button = document.createElement('button');
                 button.dataset.course = course;
@@ -284,6 +322,7 @@
                 step3Div.classList.remove('hidden');
             }
         });
+
         function renderBookSelectionButtons(course) {
             document.getElementById('book-selection-label').textContent = `Paso 3: Selecciona el Libro para ${course}`;
             const booksForCourse = masterBooks.filter(b => b.course === course);
@@ -291,47 +330,72 @@
                 `<button data-title="${book.title}" data-course="${book.course}" class="book-btn btn-enter w-full text-left font-semibold bg-slate-100 hover:bg-indigo-100 p-3 rounded-md transition">${book.title}</button>`
             ).join('');
         }
+
         bookSelectionDiv.addEventListener('click', async e => {
             if (e.target.classList.contains('book-btn')) {
                 const studentName = studentNameInput.value.trim();
-                if (!studentName) {
-                    alert('Por favor, introduce el nombre del alumno primero.');
-                    studentNameInput.focus();
-                    return;
-                }
+                if (!studentName) { alert('Introduce el nombre del alumno.'); studentNameInput.focus(); return; }
                 const { title, course } = e.target.dataset;
-                await addDoc(collection(db, PENDING_BOOKS_COLLECTION), { studentName, bookTitle: title, course, createdAt: serverTimestamp() });
+                await addDoc(collection(db, PENDING_BOOKS_COLLECTION), { studentName, bookTitle: title, course, createdAt: serverTimestamp(), status: 'pending' });
                 showToast(`'${title}' añadido para ${studentName}.`);
                 studentNameInput.value = '';
                 resetToAddState();
             }
         });
+
         backButton.addEventListener('click', resetToAddState);
         function resetToAddState() {
             step3Div.classList.add('hidden');
             step2Div.classList.remove('hidden');
             studentNameInput.focus();
         }
+
         function renderPendingBooksList(books) {
-             pendingCountSpan.textContent = books.length;
+             const activeBooks = books.filter(b => b.status !== 'delivered');
+             pendingCountSpan.textContent = activeBooks.length;
              pendingEmptyP.classList.toggle('hidden', books.length > 0);
-             pendingBooksListDiv.innerHTML = books.sort((a,b) => a.studentName.localeCompare(b.studentName)).map(book => `
-                 <div class="card-enter bg-slate-50 p-4 rounded-lg border flex justify-between items-center gap-4">
-                     <div>
-                         <p class="font-bold text-lg">${book.bookTitle}</p>
+             
+             books.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+
+             pendingBooksListDiv.innerHTML = books.map(book => {
+                let statusClass = '';
+                if (book.status === 'prepared') statusClass = 'book-prepared';
+                if (book.status === 'delivered') statusClass = 'book-delivered';
+
+                const buttons = `
+                    ${book.status === 'pending' ? `<button data-id="${book.id}" class="prepare-btn flex-shrink-0 bg-yellow-400 text-yellow-900 font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-yellow-500">Preparado</button>` : ''}
+                    ${book.status !== 'delivered' ? `<button data-id="${book.id}" class="deliver-btn flex-shrink-0 bg-green-500 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-green-600">Entregado</button>` : ''}
+                `;
+
+                return `
+                 <div class="card-enter bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${statusClass}">
+                     <div class="flex-grow">
+                         <p class="font-bold text-lg book-title">${book.bookTitle}</p>
                          <p class="text-slate-600">${book.studentName}</p>
                          <p class="inline-block bg-indigo-100 text-indigo-800 text-xs font-semibold mt-2 px-2 py-0.5 rounded-full">${book.course}</p>
                      </div>
-                     <button data-id="${book.id}" class="deliver-btn flex-shrink-0 bg-green-500 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-green-600">Entregado</button>
+                     <div class="flex space-x-2 self-end sm:self-center">
+                        ${buttons}
+                     </div>
                  </div>
-             `).join('') || pendingEmptyP.outerHTML;
+                `
+             }).join('') || pendingEmptyP.outerHTML;
         }
+        
         pendingBooksListDiv.addEventListener('click', async e => {
-            if (e.target.classList.contains('deliver-btn')) {
-                if (confirm('¿Marcar este libro como entregado?')) {
-                    await deleteDoc(doc(db, PENDING_BOOKS_COLLECTION, e.target.dataset.id));
-                    showToast('¡Libro entregado!');
-                }
+            const target = e.target;
+            const id = target.dataset.id;
+            if (!id) return;
+
+            const bookRef = doc(db, PENDING_BOOKS_COLLECTION, id);
+            
+            if (target.classList.contains('prepare-btn')) {
+                await updateDoc(bookRef, { status: 'prepared' });
+                showToast('Libro marcado como preparado.');
+            }
+            if (target.classList.contains('deliver-btn')) {
+                await updateDoc(bookRef, { status: 'delivered' });
+                showToast('¡Libro entregado!');
             }
         });
 
