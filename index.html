@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Libros Pendientes v3.6</title>
+    <title>Gestión de Libros Pendientes v3.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,7 +30,8 @@
         </header>
 
         <div class="mb-8 border-b border-slate-200">
-            <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+            <!-- CORRECCIÓN: Se añade flex-wrap para mejorar la visualización en móviles -->
+            <nav class="-mb-px flex flex-wrap space-x-4 sm:space-x-6" aria-label="Tabs">
                 <button id="tab-pendientes" class="tab-active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">Gestión de Pendientes</button>
                 <button id="tab-catalogo" class="text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">Gestión del Catálogo</button>
                 <button id="tab-historial" class="text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">Historial</button>
@@ -148,7 +149,7 @@
         masterBookListDiv.addEventListener('click', async e => { const target = e.target; const bookId = target.dataset.id; if (target.classList.contains('delete-master-book')) { if (confirm('¿Seguro que quieres eliminar este libro del catálogo?')) { await deleteDoc(doc(db, MASTER_BOOKS_COLLECTION, bookId)); showToast('Libro eliminado del catálogo.'); } } if (target.classList.contains('edit-master-book')) { const book = masterBooks.find(b => b.id === bookId); if (book) { editBookIdInput.value = book.id; addMasterBookForm.masterBookTitle.value = book.title; addMasterBookForm.masterCourse.value = book.course; formTitle.textContent = 'Editando Libro'; submitMasterBookBtn.textContent = 'Guardar Cambios'; cancelEditBtn.classList.remove('hidden'); addMasterBookForm.scrollIntoView({ behavior: 'smooth' }); addMasterBookForm.masterBookTitle.focus(); } } if (target.classList.contains('history-master-book')) { openBookHistoryModal(target.dataset.title); } });
         uploadMasterCsvBtn.addEventListener('click', async () => { /* Lógica sin cambios */ });
         
-        // --- PENDING BOOK LOGIC (RENOVADO) ---
+        // --- PENDING BOOK LOGIC ---
         const studentNameInput = document.getElementById('studentName');
         const bookSelectionList = document.getElementById('book-selection-list');
         const step2Div = document.getElementById('step-2-courses');
@@ -184,45 +185,25 @@
             }
         });
 
-        // MEJORA: Renderizar lista de libros con checkboxes y detectar duplicados
         function renderBookSelectionButtons(course) {
             document.getElementById('book-selection-label').textContent = `Paso 3: Selecciona los Libros para ${course}`;
             const booksForCourse = masterBooks.filter(b => b.course === course).sort((a,b) => a.title.localeCompare(b.title));
-            
             const studentName = studentNameInput.value.trim().toLowerCase();
-            const studentPendingBooks = new Set(
-                pendingBooks
-                    .filter(b => b.studentName.toLowerCase() === studentName && b.status !== 'delivered')
-                    .map(b => b.bookTitle)
-            );
-
+            const studentPendingBooks = new Set(pendingBooks.filter(b => b.studentName.toLowerCase() === studentName && b.status !== 'delivered').map(b => b.bookTitle));
             bookSelectionList.innerHTML = booksForCourse.map(book => {
                 const isAlreadyPending = studentPendingBooks.has(book.title);
                 const disabledClass = isAlreadyPending ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'cursor-pointer hover:bg-indigo-50';
                 const disabledInput = isAlreadyPending ? 'disabled' : '';
                 const pendingBadge = isAlreadyPending ? '<span class="text-xs bg-orange-100 text-orange-800 font-semibold px-2 py-0.5 rounded-full">Pendiente</span>' : '';
-
-                return `
-                <label class="book-select-item flex items-center justify-between space-x-3 p-3 rounded-md transition border ${disabledClass}">
-                    <div class="flex items-center space-x-3">
-                        <input type="checkbox" data-title="${book.title}" data-course="${book.course}" class="book-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" ${disabledInput}>
-                        <span class="flex-grow select-none">${book.title}</span>
-                    </div>
-                    ${pendingBadge}
-                </label>`
+                return `<label class="book-select-item flex items-center justify-between space-x-3 p-3 rounded-md transition border ${disabledClass}"><div class="flex items-center space-x-3"><input type="checkbox" data-title="${book.title}" data-course="${book.course}" class="book-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" ${disabledInput}><span class="flex-grow select-none">${book.title}</span></div>${pendingBadge}</label>`
             }).join('');
             updateAddBooksButtonState();
         }
         
         function updateAddBooksButtonState() {
             const selectedCount = bookSelectionList.querySelectorAll('input[type="checkbox"]:checked').length;
-            if (selectedCount > 0) {
-                addSelectedBooksBtn.disabled = false;
-                addSelectedBooksBtn.textContent = `Añadir ${selectedCount} Libro(s)`;
-            } else {
-                addSelectedBooksBtn.disabled = true;
-                addSelectedBooksBtn.textContent = `Añadir Libros`;
-            }
+            addSelectedBooksBtn.disabled = selectedCount === 0;
+            addSelectedBooksBtn.textContent = selectedCount > 0 ? `Añadir ${selectedCount} Libro(s)` : `Añadir Libros`;
         }
         bookSelectionList.addEventListener('change', updateAddBooksButtonState);
 
@@ -231,7 +212,6 @@
             if (!studentName) { alert('Introduce el nombre del alumno.'); studentNameInput.focus(); return; }
             const selectedCheckboxes = bookSelectionList.querySelectorAll('input[type="checkbox"]:checked');
             if (selectedCheckboxes.length === 0) return;
-            
             const batch = writeBatch(db);
             selectedCheckboxes.forEach(checkbox => {
                 const { title, course } = checkbox.dataset;
