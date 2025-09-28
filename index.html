@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Libros Pendientes v3.2</title>
+    <title>Gestión de Libros Pendientes v3.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -355,17 +355,25 @@
              pendingCountSpan.textContent = activeBooks.length;
              pendingEmptyP.classList.toggle('hidden', books.length > 0);
              
-             books.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+             // CAMBIO: Ordenar para que los más nuevos aparezcan arriba
+             books.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
              pendingBooksListDiv.innerHTML = books.map(book => {
                 let statusClass = '';
                 if (book.status === 'prepared') statusClass = 'book-prepared';
                 if (book.status === 'delivered') statusClass = 'book-delivered';
+                
+                // CAMBIO: Lógica de botones mejorada
+                const prepareButton = book.status === 'pending' 
+                    ? `<button data-id="${book.id}" class="prepare-btn flex-shrink-0 bg-yellow-400 text-yellow-900 font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-yellow-500">Preparado</button>` 
+                    : '';
+                
+                const deliverButtonText = book.status === 'delivered' ? 'Deshacer' : 'Entregado';
+                const deliverButtonClasses = book.status === 'delivered' 
+                    ? 'bg-slate-500 hover:bg-slate-600'
+                    : 'bg-green-500 hover:bg-green-600';
 
-                const buttons = `
-                    ${book.status === 'pending' ? `<button data-id="${book.id}" class="prepare-btn flex-shrink-0 bg-yellow-400 text-yellow-900 font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-yellow-500">Preparado</button>` : ''}
-                    ${book.status !== 'delivered' ? `<button data-id="${book.id}" class="deliver-btn flex-shrink-0 bg-green-500 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-green-600">Entregado</button>` : ''}
-                `;
+                const deliverButton = `<button data-id="${book.id}" data-current-status="${book.status}" class="deliver-btn flex-shrink-0 text-white font-semibold py-2 px-4 rounded-lg shadow-sm ${deliverButtonClasses}">${deliverButtonText}</button>`;
 
                 return `
                  <div class="card-enter bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${statusClass}">
@@ -375,7 +383,8 @@
                          <p class="inline-block bg-indigo-100 text-indigo-800 text-xs font-semibold mt-2 px-2 py-0.5 rounded-full">${book.course}</p>
                      </div>
                      <div class="flex space-x-2 self-end sm:self-center">
-                        ${buttons}
+                        ${prepareButton}
+                        ${deliverButton}
                      </div>
                  </div>
                 `
@@ -394,8 +403,11 @@
                 showToast('Libro marcado como preparado.');
             }
             if (target.classList.contains('deliver-btn')) {
-                await updateDoc(bookRef, { status: 'delivered' });
-                showToast('¡Libro entregado!');
+                // CAMBIO: Lógica para poder deshacer la entrega
+                const currentStatus = target.dataset.currentStatus;
+                const newStatus = currentStatus === 'delivered' ? 'prepared' : 'delivered';
+                await updateDoc(bookRef, { status: newStatus });
+                showToast(newStatus === 'delivered' ? '¡Libro entregado!' : 'Entrega deshecha.');
             }
         });
 
