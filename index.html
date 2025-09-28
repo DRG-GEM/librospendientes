@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Libros Pendientes v3</title>
+    <title>Gestión de Libros Pendientes v3.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -97,7 +97,7 @@
 };
         // --- End of Firebase Configuration ---
 
-        const appId = firebaseConfig.projectId; // Usamos el projectId para las rutas
+        const appId = firebaseConfig.projectId;
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -112,6 +112,7 @@
         const viewCatalogo = document.getElementById('view-catalogo');
         const tabPendientes = document.getElementById('tab-pendientes');
         const tabCatalogo = document.getElementById('tab-catalogo');
+        const courseSelectionDiv = document.getElementById('course-selection-buttons');
 
         function switchView(view) {
             viewCatalogo.classList.toggle('hidden', view !== 'catalogo');
@@ -248,7 +249,7 @@
             }
         });
 
-        const courseSelectionDiv = document.getElementById('course-selection-buttons');
+        // --- PENDING BOOK LOGIC ---
         const bookSelectionDiv = document.getElementById('book-selection-buttons');
         const step2Div = document.getElementById('step-2-courses');
         const step3Div = document.getElementById('step-3-books');
@@ -257,12 +258,25 @@
         const pendingCountSpan = document.getElementById('pending-count');
         const pendingEmptyP = document.getElementById('pending-empty');
 
+        // **CORREGIDO** Función de renderizado de botones más robusta
         function renderCourseSelectionButtons(books) {
-            const courses = [...new Set(books.map(b => b.course))].sort();
-            courseSelectionDiv.innerHTML = courses.map(course => 
-                `<button data-course="${course}" class="course-btn btn-enter text-center font-semibold bg-slate-100 hover:bg-indigo-100 p-3 rounded-md transition">${course}</button>`
-            ).join('') || `<p class="text-sm text-slate-500 col-span-2">Aún no hay libros en el catálogo. Ve a la pestaña "Gestión del Catálogo" para añadirlos.</p>`;
+            courseSelectionDiv.innerHTML = ''; // Limpiar botones anteriores
+            const courses = [...new Set(books.map(b => b.course).filter(c => c))].sort();
+
+            if (courses.length === 0) {
+                courseSelectionDiv.innerHTML = `<p class="text-sm text-slate-500 col-span-2">Aún no hay libros en el catálogo. Ve a "Gestión del Catálogo" para añadirlos.</p>`;
+                return;
+            }
+
+            courses.forEach(course => {
+                const button = document.createElement('button');
+                button.dataset.course = course;
+                button.className = 'course-btn btn-enter text-center font-semibold bg-slate-100 hover:bg-indigo-100 p-3 rounded-md transition';
+                button.textContent = course;
+                courseSelectionDiv.appendChild(button);
+            });
         }
+
         courseSelectionDiv.addEventListener('click', e => {
             if (e.target.classList.contains('course-btn')) {
                 renderBookSelectionButtons(e.target.dataset.course);
