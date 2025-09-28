@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Libros Pendientes v3.5</title>
+    <title>Gestión de Libros Pendientes v3.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,7 +47,6 @@
 
         <!-- Vista: Gestión del Catálogo -->
         <main id="view-catalogo" class="hidden">
-            <!-- Contenido de la vista de catálogo sin cambios -->
              <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1 space-y-8">
                     <div class="bg-white p-6 rounded-xl shadow-md"><h2 id="form-title" class="text-2xl font-semibold mb-4 text-slate-900">Añadir Libro</h2><form id="add-master-book-form" class="space-y-4"><input type="hidden" id="edit-book-id"><div><label for="masterBookTitle" class="block text-sm font-medium text-slate-700">Título del Libro</label><input type="text" id="masterBookTitle" required class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></div><div><label for="masterCourse" class="block text-sm font-medium text-slate-700">Curso</label><input type="text" id="masterCourse" required class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ej: 1º ESO A"></div><div class="flex space-x-2"><button type="submit" id="submit-master-book" class="flex-grow bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">Añadir al Catálogo</button><button type="button" id="cancel-edit-btn" class="hidden bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancelar</button></div></form></div>
@@ -60,7 +59,6 @@
 
         <!-- Vista: Historial -->
         <main id="view-historial" class="hidden">
-            <!-- Contenido de la vista de historial sin cambios -->
             <div class="bg-white p-6 rounded-xl shadow-md">
                 <h2 class="text-2xl font-semibold text-slate-900 mb-4">Historial de Alumnos</h2>
                 <div id="student-history-list" class="space-y-2"><p id="history-empty" class="text-center py-10 text-slate-500">No hay historial para mostrar.</p></div>
@@ -70,7 +68,6 @@
     
     <!-- Modal para Historial de Libros -->
     <div id="book-history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <!-- Contenido del modal sin cambios -->
         <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6"><h2 id="modal-title" class="text-2xl font-bold mb-4">Historial del Libro</h2><div id="modal-content" class="max-h-96 overflow-y-auto"></div><button id="close-modal-btn" class="mt-6 w-full bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-700">Cerrar</button></div>
     </div>
     
@@ -132,7 +129,7 @@
             setTimeout(() => toast.classList.add('hidden'), 3000);
         }
 
-        // --- CATALOG LOGIC (sin cambios) ---
+        // --- CATALOG LOGIC ---
         const addMasterBookForm = document.getElementById('add-master-book-form');
         const masterBookListDiv = document.getElementById('master-book-list');
         const catalogEmpty = document.getElementById('catalog-empty');
@@ -163,7 +160,6 @@
         const courseSelectionDiv = document.getElementById('course-selection-buttons');
         const addSelectedBooksBtn = document.getElementById('add-selected-books-btn');
 
-        // CORRECCIÓN: Lógica para renderizar los botones de curso
         function renderCourseSelectionButtons(books) {
             courseSelectionDiv.innerHTML = '';
             const courses = [...new Set(books.map(b => b.course).filter(Boolean))].sort();
@@ -188,20 +184,36 @@
             }
         });
 
-        // MEJORA: Renderizar lista de libros con checkboxes
+        // MEJORA: Renderizar lista de libros con checkboxes y detectar duplicados
         function renderBookSelectionButtons(course) {
             document.getElementById('book-selection-label').textContent = `Paso 3: Selecciona los Libros para ${course}`;
             const booksForCourse = masterBooks.filter(b => b.course === course).sort((a,b) => a.title.localeCompare(b.title));
-            bookSelectionList.innerHTML = booksForCourse.map(book =>
-                `<label class="book-select-item flex items-center space-x-3 p-3 rounded-md hover:bg-indigo-50 transition cursor-pointer border">
-                    <input type="checkbox" data-title="${book.title}" data-course="${book.course}" class="book-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                    <span class="flex-grow select-none">${book.title}</span>
+            
+            const studentName = studentNameInput.value.trim().toLowerCase();
+            const studentPendingBooks = new Set(
+                pendingBooks
+                    .filter(b => b.studentName.toLowerCase() === studentName && b.status !== 'delivered')
+                    .map(b => b.bookTitle)
+            );
+
+            bookSelectionList.innerHTML = booksForCourse.map(book => {
+                const isAlreadyPending = studentPendingBooks.has(book.title);
+                const disabledClass = isAlreadyPending ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'cursor-pointer hover:bg-indigo-50';
+                const disabledInput = isAlreadyPending ? 'disabled' : '';
+                const pendingBadge = isAlreadyPending ? '<span class="text-xs bg-orange-100 text-orange-800 font-semibold px-2 py-0.5 rounded-full">Pendiente</span>' : '';
+
+                return `
+                <label class="book-select-item flex items-center justify-between space-x-3 p-3 rounded-md transition border ${disabledClass}">
+                    <div class="flex items-center space-x-3">
+                        <input type="checkbox" data-title="${book.title}" data-course="${book.course}" class="book-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" ${disabledInput}>
+                        <span class="flex-grow select-none">${book.title}</span>
+                    </div>
+                    ${pendingBadge}
                 </label>`
-            ).join('');
+            }).join('');
             updateAddBooksButtonState();
         }
         
-        // MEJORA: Actualizar estado del botón de añadir
         function updateAddBooksButtonState() {
             const selectedCount = bookSelectionList.querySelectorAll('input[type="checkbox"]:checked').length;
             if (selectedCount > 0) {
@@ -214,7 +226,6 @@
         }
         bookSelectionList.addEventListener('change', updateAddBooksButtonState);
 
-        // MEJORA: Añadir múltiples libros con un batch
         addSelectedBooksBtn.addEventListener('click', async () => {
             const studentName = studentNameInput.value.trim();
             if (!studentName) { alert('Introduce el nombre del alumno.'); studentNameInput.focus(); return; }
@@ -242,26 +253,26 @@
             updateAddBooksButtonState();
         }
 
-        function renderPendingBooksList(books) { /* Lógica sin cambios */
+        function renderPendingBooksList(books) { 
             const activeBooks = books.filter(b => b.status !== 'delivered'); pendingCountSpan.textContent = activeBooks.length; pendingEmptyP.classList.toggle('hidden', books.length > 0); books.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); pendingBooksListDiv.innerHTML = books.map(book => { let statusClass = ''; if (book.status === 'prepared') statusClass = 'book-prepared'; if (book.status === 'delivered') statusClass = 'book-delivered'; const prepareButton = book.status === 'pending' ? `<button data-id="${book.id}" class="prepare-btn flex-shrink-0 bg-yellow-400 text-yellow-900 font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-yellow-500">Preparado</button>` : ''; const deliverButtonText = book.status === 'delivered' ? 'Deshacer' : 'Entregado'; const deliverButtonClasses = book.status === 'delivered' ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-500 hover:bg-green-600'; const deliverButton = `<button data-id="${book.id}" data-current-status="${book.status}" class="deliver-btn flex-shrink-0 text-white font-semibold py-2 px-4 rounded-lg shadow-sm ${deliverButtonClasses}">${deliverButtonText}</button>`; return `<div class="card-enter bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${statusClass}"><div class="flex-grow"><p class="font-bold text-lg book-title">${book.bookTitle}</p><p class="text-slate-600">${book.studentName}</p><p class="inline-block bg-indigo-100 text-indigo-800 text-xs font-semibold mt-2 px-2 py-0.5 rounded-full">${book.course}</p></div><div class="flex space-x-2 self-end sm:self-center">${prepareButton}${deliverButton}</div></div>` }).join('') || pendingEmptyP.outerHTML;
         }
         
-        pendingBooksListDiv.addEventListener('click', async e => { /* Lógica sin cambios */
+        pendingBooksListDiv.addEventListener('click', async e => {
             const target = e.target; const id = target.dataset.id; if (!id) return; const bookRef = doc(db, PENDING_BOOKS_COLLECTION, id); if (target.classList.contains('prepare-btn')) { await updateDoc(bookRef, { status: 'prepared' }); showToast('Libro marcado como preparado.'); } if (target.classList.contains('deliver-btn')) { const newStatus = target.dataset.currentStatus === 'delivered' ? 'prepared' : 'delivered'; await updateDoc(bookRef, { status: newStatus }); showToast(newStatus === 'delivered' ? '¡Libro entregado!' : 'Entrega deshecha.'); }
         });
 
-        // --- HISTORY LOGIC (sin cambios) ---
+        // --- HISTORY LOGIC ---
         const studentHistoryListDiv = document.getElementById('student-history-list'); const historyEmptyP = document.getElementById('history-empty');
         function getStatusBadge(status) { switch(status) { case 'delivered': return `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-green-600 bg-green-200">Entregado</span>`; case 'prepared': return `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-yellow-600 bg-yellow-200">Preparado</span>`; default: return `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-red-600 bg-red-200">Pendiente</span>`; } }
         function renderHistoryView(books) { historyEmptyP.classList.toggle('hidden', books.length > 0); const booksByStudent = books.reduce((acc, book) => { (acc[book.studentName] = acc[book.studentName] || []).push(book); return acc; }, {}); studentHistoryListDiv.innerHTML = Object.keys(booksByStudent).sort().map(studentName => `<div class="border rounded-lg overflow-hidden"><button class="accordion-header w-full text-left p-4 font-semibold text-lg hover:bg-slate-50 flex justify-between items-center"><span>${studentName}</span><span class="text-sm bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">${booksByStudent[studentName].length} libros</span></button><div class="accordion-content bg-slate-50"><ul class="divide-y p-4 pt-0">${booksByStudent[studentName].map(book => `<li class="py-2 flex justify-between items-center"><span class="text-slate-800">${book.bookTitle} <em class="text-slate-500 text-sm">(${book.course})</em></span>${getStatusBadge(book.status)}</li>`).join('')}</ul></div></div>`).join(''); }
         studentHistoryListDiv.addEventListener('click', e => { const header = e.target.closest('.accordion-header'); if (header) { const content = header.nextElementSibling; if (content.style.maxHeight) { content.style.maxHeight = null; } else { content.style.maxHeight = content.scrollHeight + "px"; } } });
         
-        // --- BOOK HISTORY MODAL (sin cambios) ---
+        // --- BOOK HISTORY MODAL ---
         const modal = document.getElementById('book-history-modal'); const modalTitle = document.getElementById('modal-title'); const modalContent = document.getElementById('modal-content');
         function openBookHistoryModal(bookTitle) { modalTitle.textContent = `Historial de: ${bookTitle}`; const history = pendingBooks.filter(b => b.bookTitle === bookTitle); if (history.length > 0) { modalContent.innerHTML = `<ul class="divide-y">${history.map(book => `<li class="py-2 flex justify-between items-center"><span>${book.studentName} <em class="text-slate-500 text-sm">(${book.course})</em></span>${getStatusBadge(book.status)}</li>`).join('')}</ul>`; } else { modalContent.innerHTML = `<p class="text-slate-500">Este libro no ha sido asignado a ningún alumno todavía.</p>`; } modal.classList.remove('hidden'); }
         document.getElementById('close-modal-btn').addEventListener('click', () => modal.classList.add('hidden'));
 
-        // --- RESET APP LOGIC (sin cambios) ---
+        // --- RESET APP LOGIC ---
         document.getElementById('reset-app-btn').addEventListener('click', async () => { if (confirm("ATENCIÓN: ¿Seguro que quieres borrar TODO el catálogo de libros y TODOS los pendientes?")) { if(confirm("Esta acción es IRREVERSIBLE. ¿Estás completamente seguro?")) { console.log("Borrando datos..."); const deleteCollection = async (collPath) => { const q = query(collection(db, collPath)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); }; try { await deleteCollection(PENDING_BOOKS_COLLECTION); await deleteCollection(MASTER_BOOKS_COLLECTION); showToast("¡Aplicación reseteada con éxito!"); } catch (e) { console.error("Error reseteando la app:", e); showToast("Error al resetear. Revisa la consola."); } } } });
         
         // --- Firestore Listeners ---
@@ -273,7 +284,7 @@
         onSnapshot(query(collection(db, PENDING_BOOKS_COLLECTION)), snapshot => {
             pendingBooks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderPendingBooksList(pendingBooks);
-            renderHistoryView(pendingBooks); // Update history view in real-time
+            renderHistoryView(pendingBooks); 
         });
     </script>
 </body>
