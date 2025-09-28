@@ -205,9 +205,15 @@
             if (target.classList.contains('edit-master-book')) {
                 const book = masterBooks.find(b => b.id === bookId);
                 if (book) {
-                    editBookIdInput.value = book.id; addMasterBookForm.masterBookTitle.value = book.title; addMasterBookForm.masterCourse.value = book.course;
-                    formTitle.textContent = 'Editando Libro'; submitMasterBookBtn.textContent = 'Guardar Cambios'; cancelEditBtn.classList.remove('hidden');
+                    editBookIdInput.value = book.id; 
+                    addMasterBookForm.masterBookTitle.value = book.title; 
+                    addMasterBookForm.masterCourse.value = book.course;
+                    formTitle.textContent = 'Editando Libro'; 
+                    submitMasterBookBtn.textContent = 'Guardar Cambios'; 
+                    cancelEditBtn.classList.remove('hidden');
                     addMasterBookForm.scrollIntoView({ behavior: 'smooth' });
+                    // CORRECCIÓN: Poner el foco en el primer campo para una mejor UX
+                    addMasterBookForm.masterBookTitle.focus();
                 }
             }
             if (target.classList.contains('history-master-book')) {
@@ -286,15 +292,15 @@
                 return acc;
             }, {});
             studentHistoryListDiv.innerHTML = Object.keys(booksByStudent).sort().map(studentName => `
-                <div class="border rounded-lg">
+                <div class="border rounded-lg overflow-hidden">
                     <button class="accordion-header w-full text-left p-4 font-semibold text-lg hover:bg-slate-50 flex justify-between items-center">
                         <span>${studentName}</span>
                         <span class="text-sm bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">${booksByStudent[studentName].length} libros</span>
                     </button>
-                    <div class="accordion-content bg-slate-50 px-4 pb-4">
-                        <ul class="divide-y">${booksByStudent[studentName].map(book => `
+                    <div class="accordion-content bg-slate-50">
+                        <ul class="divide-y p-4 pt-0">${booksByStudent[studentName].map(book => `
                             <li class="py-2 flex justify-between items-center">
-                                <span>${book.bookTitle} <em class="text-slate-500 text-sm">(${book.course})</em></span>
+                                <span class="text-slate-800">${book.bookTitle} <em class="text-slate-500 text-sm">(${book.course})</em></span>
                                 ${getStatusBadge(book.status)}
                             </li>`).join('')}
                         </ul>
@@ -306,7 +312,12 @@
             const header = e.target.closest('.accordion-header');
             if (header) {
                 const content = header.nextElementSibling;
-                content.style.maxHeight = content.style.maxHeight ? null : content.scrollHeight + "px";
+                // CORRECCIÓN: Toggle para el acordeón
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
             }
         });
 
